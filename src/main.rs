@@ -1,47 +1,39 @@
 pub mod generator;
 
-use crate::generator::{
-    generate_casaos_app_management_package, generate_casaos_cli_package,
-    generate_casaos_gateway_package, generate_casaos_install,
-    generate_casaos_local_storage_package, generate_casaos_message_bus_package,
-    generate_casaos_package, generate_casaos_ui_package, generate_casaos_user_service_package,
-};
-use tokio::fs::File;
+use generator::CasaOSPackage;
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
-    let casaos = File::create("./casaos/PKGBUILD").await.unwrap();
-    let casaos_install = File::create("./casaos/casaos.install").await.unwrap();
-    let casaos_app_management = File::create("./casaos-app-management/PKGBUILD")
+    init_logger();
+    let package_builder = CasaOSPackage::new();
+    package_builder.add_package("casaos").await.unwrap();
+    package_builder
+        .add_package("casaos-app-management")
         .await
         .unwrap();
-    let casaos_local_storage = File::create("./casaos-local-storage/PKGBUILD")
+    package_builder
+        .add_package("casaos-local-storage")
         .await
         .unwrap();
-    let casaos_user_service = File::create("./casaos-user-service/PKGBUILD")
+    package_builder
+        .add_package("casaos-user-service")
         .await
         .unwrap();
-    let casaos_message_bus = File::create("./casaos-message-bus/PKGBUILD").await.unwrap();
-    let casaos_gateway = File::create("./casaos-gateway/PKGBUILD").await.unwrap();
-    let casaos_cli = File::create("./casaos-cli/PKGBUILD").await.unwrap();
-    let casaos_ui = File::create("./casaos-ui/PKGBUILD").await.unwrap();
-    generate_casaos_package(casaos).await.unwrap();
-    generate_casaos_install(casaos_install).await.unwrap();
-    generate_casaos_app_management_package(casaos_app_management)
+    package_builder
+        .add_package("casaos-message-bus")
         .await
         .unwrap();
-    generate_casaos_local_storage_package(casaos_local_storage)
-        .await
-        .unwrap();
-    generate_casaos_user_service_package(casaos_user_service)
-        .await
-        .unwrap();
-    generate_casaos_message_bus_package(casaos_message_bus)
-        .await
-        .unwrap();
-    generate_casaos_gateway_package(casaos_gateway)
-        .await
-        .unwrap();
-    generate_casaos_cli_package(casaos_cli).await.unwrap();
-    generate_casaos_ui_package(casaos_ui).await.unwrap();
+    package_builder.add_package("casaos-gateway").await.unwrap();
+    package_builder.add_package("casaos-cli").await.unwrap();
+    package_builder.add_package("casaos-ui").await.unwrap();
+}
+
+fn init_logger() {
+    let appender = tracing_appender::rolling::never("logs", "build.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(appender);
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(non_blocking))
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 }
