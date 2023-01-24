@@ -1,40 +1,58 @@
-use lazy_static::lazy_static;
-use tokio::io::AsyncWriteExt;
-use tracing::{error, info};
+use tokio::{io::AsyncWriteExt, process::Command};
 
 const VERSION: &str = "0.4.1";
 const MAINTAINER: &str = "Maintainer: Ns2Kracy <2220496937@qq.com>";
 const X86_64_SOURCE: &str =
-    "{url}/releases/download/v{pkgver}/linux-amd64-{pkgname}-v{pkgver}.tar.gz";
+    "${url}/releases/download/v${pkgver}/linux-amd64-${pkgname}-v${pkgver}.tar.gz";
 const AARCH64_SOURCE: &str =
-    "{url}/releases/download/v{pkgver}/linux-arm64-{pkgname}-v{pkgver}.tar.gz";
+    "${url}/releases/download/v${pkgver}/linux-arm64-${pkgname}-v${pkgver}.tar.gz";
 const ARMV7H_SOURCE: &str =
-    "{url}/releases/download/v{pkgver}/linux-armv7-{pkgname}-v{pkgver}.tar.gz";
+    "${url}/releases/download/v${pkgver}/linux-armv7-${pkgname}-v${pkgver}.tar.gz";
 const SOURCE: &str = "${url}/releases/download/v${pkgver}/linux-all-casaos-v${pkgver}.tar.gz";
 const INSTALL: &str = "${pkgname}.install";
 
-lazy_static! {
-    pub static ref ARCH: Vec<&'static str> = vec!["amd64", "aarch64", "armv7h"];
-    pub static ref URL: Vec<&'static str> = vec![
-        "https://github.com/IceWhaleTech/CasaOS",
-        "https://github.com/IceWhaleTech/CasaOS-AppManagement",
-        "https://github.com/IceWhaleTech/CasaOS-LocalStorage",
-        "https://github.com/IceWhaleTech/CasaOS-UserService",
-        "https://github.com/IceWhaleTech/CasaOS-MessageBus",
-        "https://github.com/IceWhaleTech/CasaOS-Gateway",
-        "https://github.com/IceWhaleTech/CasaOS-CLI",
-        "https://github.com/IceWhaleTech/CasaOS-UI",
-    ];
-    pub static ref PACKAGE_NAME: Vec<&'static str> = vec![
-        "casaos",
-        "casaos-app-management",
-        "casaos-local-storage",
-        "casaos-user-service",
-        "casaos-message-bus",
-        "casaos-gateway",
-        "casaos-cli",
-        "casaos-ui",
-    ];
+#[derive(Debug, Clone, Copy)]
+pub enum PackageType {
+    CasaOS,
+    CasaOSAppManagement,
+    CasaOSLocalStorage,
+    CasaOSUserService,
+    CasaOSMessageBus,
+    CasaOSGateway,
+    CasaOSCLI,
+    CasaOSUI,
+}
+
+impl PackageType {
+    pub fn url(&self) -> &str {
+        match self {
+            PackageType::CasaOS => "https://github.com/IceWhaleTech/CasaOS",
+            PackageType::CasaOSAppManagement => {
+                "https://github.com/IceWhaleTech/CasaOS-AppManagement"
+            }
+            PackageType::CasaOSLocalStorage => {
+                "https://github.com/IceWhaleTech/CasaOS-LocalStorage"
+            }
+            PackageType::CasaOSUserService => "https://github.com/IceWhaleTech/CasaOS-UserService",
+            PackageType::CasaOSMessageBus => "https://github.com/IceWhaleTech/CasaOS-MessageBus",
+            PackageType::CasaOSGateway => "https://github.com/IceWhaleTech/CasaOS-Gateway",
+            PackageType::CasaOSCLI => "https://github.com/IceWhaleTech/CasaOS-CLI",
+            PackageType::CasaOSUI => "https://github.com/IceWhaleTech/CasaOS-UI",
+        }
+    }
+
+    pub fn to_string(&self) -> &str {
+        match self {
+            PackageType::CasaOS => "casaos",
+            PackageType::CasaOSAppManagement => "casaos-app-management",
+            PackageType::CasaOSLocalStorage => "casaos-local-storage",
+            PackageType::CasaOSUserService => "casaos-user-service",
+            PackageType::CasaOSMessageBus => "casaos-message-bus",
+            PackageType::CasaOSGateway => "casaos-gateway",
+            PackageType::CasaOSCLI => "casaos-cli",
+            PackageType::CasaOSUI => "casaos-ui",
+        }
+    }
 }
 
 pub struct CasaOSPackage;
@@ -44,7 +62,7 @@ impl CasaOSPackage {
         Self
     }
 
-    pub async fn add_package(&self, package_name: &str) -> anyhow::Result<()> {
+    pub async fn add_package(&self, package_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let outputs = output_package().await;
         let casaos_install = tokio::fs::File::create("./build/casaos/casaos.install")
             .await
@@ -52,69 +70,116 @@ impl CasaOSPackage {
 
         match package_name {
             "casaos" => {
-                info!("Generating casaos package dir");
-                create_package_dir(PACKAGE_NAME[0]).await.unwrap();
-                info!("Generating casaos package");
+                let mut makepkg = Command::new("makepkg");
+                create_package_dir(PackageType::CasaOS.to_string())
+                    .await
+                    .unwrap();
                 generate_casaos_package(outputs[0].try_clone().await.unwrap())
                     .await
                     .unwrap();
-                info!("Generating casaos.install");
                 generate_casaos_install(casaos_install).await.unwrap();
+                makepkg
+                    .current_dir("./build/casaos")
+                    .arg("-s")
+                    .spawn()
+                    .unwrap();
             }
             "casaos-app-management" => {
-                info!("Generating casaos-app-management package dir");
-                create_package_dir(PACKAGE_NAME[1]).await.unwrap();
-                info!("Generating casaos-app-management package");
+                let mut makepkg = Command::new("makepkg");
+                create_package_dir(PackageType::CasaOSAppManagement.to_string())
+                    .await
+                    .unwrap();
                 generate_casaos_app_management_package(outputs[1].try_clone().await.unwrap())
                     .await
                     .unwrap();
+                makepkg
+                    .current_dir("./build/casaos-app-management")
+                    .arg("-s")
+                    .spawn()
+                    .unwrap();
             }
             "casaos-local-storage" => {
-                info!("Generating casaos-local-storage package dir");
-                create_package_dir(PACKAGE_NAME[2]).await.unwrap();
-                info!("Generating casaos-local-storage package");
+                let mut makepkg = Command::new("makepkg");
+                create_package_dir(PackageType::CasaOSLocalStorage.to_string())
+                    .await
+                    .unwrap();
                 generate_casaos_local_storage_package(outputs[2].try_clone().await.unwrap())
                     .await
                     .unwrap();
+                makepkg
+                    .current_dir("./build/casaos-local-storage")
+                    .arg("-s")
+                    .spawn()
+                    .unwrap();
             }
             "casaos-user-service" => {
-                info!("Generating casaos-user-service package dir");
-                create_package_dir(PACKAGE_NAME[3]).await.unwrap();
-                info!("Generating casaos-user-service package");
+                let mut makepkg = Command::new("makepkg");
+                create_package_dir(PackageType::CasaOSUserService.to_string())
+                    .await
+                    .unwrap();
                 generate_casaos_user_service_package(outputs[3].try_clone().await.unwrap())
                     .await
                     .unwrap();
+                makepkg
+                    .current_dir("./build/casaos-user-service")
+                    .arg("-s")
+                    .spawn()
+                    .unwrap();
             }
             "casaos-message-bus" => {
-                info!("Generating casaos-message-bus package dir");
-                create_package_dir(PACKAGE_NAME[4]).await.unwrap();
-                info!("Generating casaos-message-bus package");
+                let mut makepkg = Command::new("makepkg");
+                create_package_dir(PackageType::CasaOSMessageBus.to_string())
+                    .await
+                    .unwrap();
                 generate_casaos_message_bus_package(outputs[4].try_clone().await.unwrap())
                     .await
                     .unwrap();
+                makepkg
+                    .current_dir("./build/casaos-message-bus")
+                    .arg("-s")
+                    .spawn()
+                    .unwrap();
             }
             "casaos-gateway" => {
-                info!("Generating casaos-gateway package dir");
-                create_package_dir(PACKAGE_NAME[5]).await.unwrap();
-                info!("Generating casaos-gateway package");
+                let mut makepkg = Command::new("makepkg");
+                create_package_dir(PackageType::CasaOSGateway.to_string())
+                    .await
+                    .unwrap();
                 generate_casaos_gateway_package(outputs[5].try_clone().await.unwrap())
                     .await
                     .unwrap();
+                makepkg
+                    .current_dir("./build/casaos-gateway")
+                    .arg("-s")
+                    .spawn()
+                    .unwrap();
             }
             "casaos-cli" => {
-                info!("Generating casaos-cli package dir");
-                create_package_dir(PACKAGE_NAME[6]).await.unwrap();
-                info!("Generating casaos-cli package");
+                let mut makepkg = Command::new("makepkg");
+                create_package_dir(PackageType::CasaOSCLI.to_string())
+                    .await
+                    .unwrap();
                 generate_casaos_cli_package(outputs[6].try_clone().await.unwrap())
                     .await
                     .unwrap();
+                makepkg
+                    .current_dir("./build/casaos-cli")
+                    .arg("-s")
+                    .spawn()
+                    .unwrap();
             }
             "casaos-ui" => {
-                info!("Generating casaos-ui package dir");
-                create_package_dir(PACKAGE_NAME[7]).await.unwrap();
-                info!("Generating casaos-ui package");
+                let mut makepkg = Command::new("makepkg");
+                create_package_dir(PackageType::CasaOSUI.to_string())
+                    .await
+                    .unwrap();
                 generate_casaos_ui_package(outputs[7].try_clone().await.unwrap())
                     .await
+                    .unwrap();
+                makepkg
+                    .current_dir("./build/casaos-ui")
+                    .arg("-s")
+                    .spawn()
                     .unwrap();
             }
             _ => {}
@@ -125,7 +190,9 @@ impl CasaOSPackage {
 
 /// 生成casaos的install文件
 /// 用于执行一些PKGBUILD不能执行的脚本
-pub async fn generate_casaos_install(mut output: tokio::fs::File) -> anyhow::Result<()> {
+pub async fn generate_casaos_install(
+    mut output: tokio::fs::File,
+) -> Result<(), Box<dyn std::error::Error>> {
     // pre_install
     // 安装前执行的脚本
     let pre_install = r#"
@@ -191,17 +258,16 @@ post_remove() {
     output.write_all(post_update.as_bytes()).await?;
     output.write_all(pre_remove.as_bytes()).await?;
     output.write_all(post_remove.as_bytes()).await?;
-    info!("Generated casaos install file");
     Ok(())
 }
 
 /// Generate the PKGBUILD file for casaos.
 /// Src: https://github.com/IceWhaleTech/CasaOS
 /// Output: /casaos/PKGBUILD
-pub async fn generate_casaos_package(mut output: tokio::fs::File) -> anyhow::Result<()> {
-    let checksums_x86_64 = get_x86_64_checksums().await;
-    let checksums_aarch64 = get_aarch64_checksums().await;
-    let checksums_armv7h = get_armv7h_checksums().await;
+pub async fn generate_casaos_package(
+    mut output: tokio::fs::File,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let checksums = get_checksums(PackageType::CasaOS).await;
     let content = format!(
         "
 pkgname=casaos
@@ -215,7 +281,7 @@ install={}
 backup=('etc/casaos/casaos.conf')
     ",
         VERSION.clone(),
-        URL[0],
+        PackageType::CasaOS.url(),
         "{pkgname}.install"
     );
 
@@ -230,13 +296,11 @@ source_armv7h=('{:?}')
 
     let chechsums_content = format!(
         "
-sha256sums_x86_64=({})
-sha256sums_aarch64=({})
-sha256sums_armv7h=({})
+sha256sums_x86_64=({:?})
+sha256sums_aarch64=({:?})
+sha256sums_armv7h=({:?})
     ",
-        checksums_x86_64[0].clone(),
-        checksums_aarch64[0].clone(),
-        checksums_armv7h[0].clone()
+        checksums[0], checksums[1], checksums[2]
     );
 
     let package_content = r#"
@@ -254,16 +318,7 @@ package() {
     output.write_all(source_content.as_bytes()).await?;
     output.write_all(chechsums_content.as_bytes()).await?;
     output.write_all(package_content.as_bytes()).await?;
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    Ok(())
 }
 
 /// Generate the PKGBUILD file for casaos-app-management.
@@ -271,7 +326,7 @@ package() {
 /// Output: /casaos-app-management/PKGBUILD
 pub async fn generate_casaos_app_management_package(
     mut output: tokio::fs::File,
-) -> anyhow::Result<()> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let source_content = format!(
         "
 source_x86_64=({})
@@ -281,16 +336,7 @@ source_armv7h=({})
         X86_64_SOURCE, AARCH64_SOURCE, ARMV7H_SOURCE
     );
     output.write_all(source_content.as_bytes()).await?;
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    Ok(())
 }
 
 /// Generate the PKGBUILD file for casaos-local-storage.
@@ -298,7 +344,7 @@ source_armv7h=({})
 /// Output: /casaos-local-storage/PKGBUILD
 pub async fn generate_casaos_local_storage_package(
     mut output: tokio::fs::File,
-) -> anyhow::Result<()> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let source_content = format!(
         "
 source_x86_64=({})
@@ -308,17 +354,7 @@ source_armv7h=({})
         X86_64_SOURCE, AARCH64_SOURCE, ARMV7H_SOURCE
     );
     output.write_all(source_content.as_bytes()).await?;
-
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    Ok(())
 }
 
 /// Generate the PKGBUILD file for casaos-user-service.
@@ -326,7 +362,7 @@ source_armv7h=({})
 /// Output: /casaos-user-service/PKGBUILD
 pub async fn generate_casaos_user_service_package(
     mut output: tokio::fs::File,
-) -> anyhow::Result<()> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let source_content = format!(
         "
 source_x86_64=({})
@@ -336,16 +372,7 @@ source_armv7h=({})
         X86_64_SOURCE, AARCH64_SOURCE, ARMV7H_SOURCE
     );
     output.write_all(source_content.as_bytes()).await?;
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    Ok(())
 }
 
 /// Generate the PKGBUILD file for casaos-message-bus.
@@ -353,7 +380,7 @@ source_armv7h=({})
 /// Output: /casaos-message-bus/PKGBUILD
 pub async fn generate_casaos_message_bus_package(
     mut output: tokio::fs::File,
-) -> anyhow::Result<()> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let source_content = format!(
         "
 source_x86_64=({})
@@ -363,22 +390,15 @@ source_armv7h=({})
         X86_64_SOURCE, AARCH64_SOURCE, ARMV7H_SOURCE
     );
     output.write_all(source_content.as_bytes()).await?;
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    Ok(())
 }
 
 /// Generate the PKGBUILD file for casaos-gateway.
 /// Src: https://github.com/IceWhaleTech/CasaOS-Gateway
 /// Output: /casaos-gateway/PKGBUILD
-pub async fn generate_casaos_gateway_package(mut output: tokio::fs::File) -> anyhow::Result<()> {
+pub async fn generate_casaos_gateway_package(
+    mut output: tokio::fs::File,
+) -> Result<(), Box<dyn std::error::Error>> {
     let source_content = format!(
         "
 source_x86_64=({})
@@ -388,22 +408,31 @@ source_armv7h=({})
         X86_64_SOURCE, AARCH64_SOURCE, ARMV7H_SOURCE
     );
     output.write_all(source_content.as_bytes()).await?;
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    Ok(())
 }
 
 /// Generate the PKGBUILD file for casaos-cli.
 /// Src: https://github.com/IceWhaleTech/CasaOS-CLI
 /// Output: /casaos-cli/PKGBUILD
-pub async fn generate_casaos_cli_package(mut output: tokio::fs::File) -> anyhow::Result<()> {
+pub async fn generate_casaos_cli_package(
+    mut output: tokio::fs::File,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let checksums = get_checksums(PackageType::CasaOSCLI).await;
+    let content = format!(
+        "# {}
+pkgname=casaos-cli
+pkgver={}
+pkgrel=1
+pkgdesc='A command-line tool to interact with CasaOS for testing and diagnosing purpose'
+arch=('x86_64' 'aarch64' 'armv7h')
+url={}
+license=('APACHE')
+",
+        MAINTAINER,
+        VERSION,
+        PackageType::CasaOSCLI.url()
+    );
+
     let source_content = format!(
         "
 source_x86_64=({})
@@ -412,23 +441,37 @@ source_armv7h=({})
     ",
         X86_64_SOURCE, AARCH64_SOURCE, ARMV7H_SOURCE
     );
+
+    let checksum_content = format!(
+        "
+sha256sums_x86_64=({})
+sha256sums_aarch64=({})
+sha256sums_armv7h=({})
+    ",
+        checksums[0], checksums[1], checksums[2]
+    );
+
+    let package_content = r#"
+package() {
+    _sysdir="${srcdir}/build/sysroot"
+    install -Dm755 "${_sysdir}/usr/bin/${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
+    install -Dm644 "${_sysdir}/etc/bash_completion.d/${pkgname}-completion" "${pkgdir}/etc/bash_completion.d/${pkgname}-completion"
+}    
+"#;
+
+    output.write_all(content.as_bytes()).await?;
     output.write_all(source_content.as_bytes()).await?;
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    output.write_all(checksum_content.as_bytes()).await?;
+    output.write_all(package_content.as_bytes()).await?;
+    Ok(())
 }
 
 /// Generate the PKGBUILD file for casaos-ui.
 /// Src: https://github.com/IceWhaleTech/CasaOS-UI
 /// Output: /casaos-ui/PKGBUILD
-pub async fn generate_casaos_ui_package(mut output: tokio::fs::File) -> anyhow::Result<()> {
+pub async fn generate_casaos_ui_package(
+    mut output: tokio::fs::File,
+) -> Result<(), Box<dyn std::error::Error>> {
     let content = format!(
         "# {}
 pkgname=casaos-ui
@@ -443,8 +486,8 @@ source=({})
 sha256sums=(SKIP)
     ",
         MAINTAINER,
-        VERSION.clone(),
-        URL[7].clone(),
+        VERSION,
+        PackageType::CasaOSUI.url(),
         INSTALL,
         SOURCE
     );
@@ -457,114 +500,96 @@ package() {
     "#;
     output.write(&content.as_bytes()).await?;
     output.write(&package.as_bytes()).await?;
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    Ok(())
 }
 
 /// Generate the install file for casaos-ui.
 /// mainly used for removing the /var/lib/casaos directory.
-pub async fn generate_casaos_ui_install(mut output: tokio::fs::File) -> anyhow::Result<()> {
+pub async fn generate_casaos_ui_install(
+    mut output: tokio::fs::File,
+) -> Result<(), Box<dyn std::error::Error>> {
     let post_remove = r#"#!/bin/bash
 post_remove() {
     rm -rf /var/lib/casaos
 }
     "#;
     output.write(&post_remove.as_bytes()).await?;
-    match output.sync_all().await {
-        Ok(_) => {
-            info!("Generated casaos local storage file");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to generate casaos local storage file");
-            Err(anyhow::Error::new(e))
-        }
-    }
+    Ok(())
 }
 
-/// Get x86_64 checksums from GitHub release page.
-pub async fn get_x86_64_checksums() -> Vec<String> {
-    let mut checksums = Vec::new();
+pub async fn get_checksums(package: PackageType) -> Vec<String> {
+    vec![
+        get_x86_64_checksums(package).await,
+        get_aarch64_checksums(package).await,
+        get_armv7h_checksums(package).await,
+    ]
+}
 
+pub async fn get_x86_64_checksums(package: PackageType) -> String {
     let client = reqwest::Client::new();
-    for i in 0..URL.len() - 1 {
-        let checksums_url = format!("{}/{}/checksums.txt", URL[i].clone(), VERSION.clone(),);
-        let res = client.get(&checksums_url).send().await.unwrap();
-        let checksums_text = res.text().await.unwrap();
+    let url = format!(
+        "{}/releases/download/v{}/checksums.txt",
+        package.url(),
+        VERSION
+    );
+    let resp = client.get(&url).send().await.unwrap();
+    let checksums = resp.text().await.unwrap();
+    let filter = format!(
+        "linux-amd64-casaos-{}-v{}.tar.gz",
+        package.to_string(),
+        VERSION
+    );
 
-        let checksums_filter = format!(
-            "linux-{}-{}-{}.tar.gz",
-            ARCH[0].clone(),
-            PACKAGE_NAME[i].clone(),
-            VERSION.clone()
-        );
-        let checksums_text = checksums_text
-            .split_whitespace()
-            .filter(|&x| x.contains(&checksums_filter))
-            .collect::<Vec<&str>>();
-        let checksums_text = checksums_text[0].to_string();
-        checksums.push(checksums_text);
-    }
+    let checksums = checksums
+        .split_whitespace()
+        .filter(|s| s.contains(&filter))
+        .map(|s| s.to_string())
+        .collect::<String>();
     checksums
 }
 
-/// Get aarch64 checksums from GitHub release page.
-pub async fn get_aarch64_checksums() -> Vec<String> {
-    let mut checksums = Vec::new();
-
+pub async fn get_aarch64_checksums(package: PackageType) -> String {
     let client = reqwest::Client::new();
-    for i in 0..URL.len() - 1 {
-        let checksums_url = format!("{}/{}/checksums.txt", URL[i].clone(), VERSION.clone(),);
-        let res = client.get(&checksums_url).send().await.unwrap();
-        let checksums_text = res.text().await.unwrap();
+    let url = format!(
+        "{}/releases/download/v{}/checksums.txt",
+        package.url(),
+        VERSION
+    );
+    let resp = client.get(&url).send().await.unwrap();
+    let checksums = resp.text().await.unwrap();
+    let filter = format!(
+        "linux-arm64-casaos-{}-v{}.tar.gz",
+        package.to_string(),
+        VERSION
+    );
 
-        let checksums_filter = format!(
-            "linux-{}-{}-{}.tar.gz",
-            ARCH[1].clone(),
-            PACKAGE_NAME[i].clone(),
-            VERSION.clone()
-        );
-        let checksums_text = checksums_text
-            .split_whitespace()
-            .filter(|&x| x.contains(&checksums_filter))
-            .collect::<Vec<&str>>();
-        let checksums_text = checksums_text[0].to_string();
-        checksums.push(checksums_text);
-    }
+    let checksums = checksums
+        .split_whitespace()
+        .filter(|s| s.contains(&filter))
+        .map(|s| s.to_string())
+        .collect::<String>();
     checksums
 }
 
-/// Get armv7h checksums from the GitHub release page.
-pub async fn get_armv7h_checksums() -> Vec<String> {
-    let mut checksums = Vec::new();
-
+pub async fn get_armv7h_checksums(package: PackageType) -> String {
     let client = reqwest::Client::new();
-    for i in 0..URL.len() - 1 {
-        let checksums_url = format!("{}/{}/checksums.txt", URL[i].clone(), VERSION.clone(),);
-        let res = client.get(&checksums_url).send().await.unwrap();
-        let checksums_text = res.text().await.unwrap();
-
-        let checksums_filter = format!(
-            "linux-{}-{}-{}.tar.gz",
-            ARCH[2].clone(),
-            PACKAGE_NAME[i].clone(),
-            VERSION.clone()
-        );
-        let checksums_text = checksums_text
-            .split_whitespace()
-            .filter(|&x| x.contains(&checksums_filter))
-            .collect::<Vec<&str>>();
-        let checksums_text = checksums_text[0].to_string();
-        checksums.push(checksums_text);
-    }
+    let url = format!(
+        "{}/releases/download/v{}/checksums.txt",
+        package.url(),
+        VERSION
+    );
+    let resp = client.get(&url).send().await.unwrap();
+    let checksums = resp.text().await.unwrap();
+    let filter = format!(
+        "linux-arm-7-casaos-{}-v{}.tar.gz",
+        package.to_string(),
+        VERSION
+    );
+    let checksums = checksums
+        .split_whitespace()
+        .filter(|s| s.contains(&filter))
+        .map(|s| s.to_string())
+        .collect::<String>();
     checksums
 }
 
@@ -600,12 +625,12 @@ mod test {
         generate_casaos_gateway_package, generate_casaos_install,
         generate_casaos_local_storage_package, generate_casaos_message_bus_package,
         generate_casaos_package, generate_casaos_ui_install, generate_casaos_ui_package,
-        generate_casaos_user_service_package, get_aarch64_checksums, get_armv7h_checksums,
-        get_x86_64_checksums, CasaOSPackage,
+        generate_casaos_user_service_package, get_checksums, CasaOSPackage, PackageType,
     };
 
     #[tokio::test]
     async fn test_generate_casaos_package() {
+        create_package_dir("./build/casaos").await.unwrap();
         let output = tokio::fs::File::create("./build/casaos/PKGBUILD")
             .await
             .unwrap();
@@ -614,6 +639,7 @@ mod test {
 
     #[tokio::test]
     async fn test_generate_casaos_install() {
+        create_package_dir("./build/casaos").await.unwrap();
         let output = tokio::fs::File::create("./build/casaos/casaos.install")
             .await
             .unwrap();
@@ -622,6 +648,9 @@ mod test {
 
     #[tokio::test]
     async fn test_generate_casaos_app_management_package() {
+        create_package_dir("./build/casaos-app-management")
+            .await
+            .unwrap();
         let output = tokio::fs::File::create("./build/casaos-app-management/PKGBUILD")
             .await
             .unwrap();
@@ -632,6 +661,9 @@ mod test {
 
     #[tokio::test]
     async fn test_generate_casaos_local_storage_package() {
+        create_package_dir("./build/casaos-local-storage")
+            .await
+            .unwrap();
         let output = tokio::fs::File::create("./build/casaos-local-storage/PKGBUILD")
             .await
             .unwrap();
@@ -640,6 +672,9 @@ mod test {
 
     #[tokio::test]
     async fn test_generate_casaos_user_service_package() {
+        create_package_dir("./build/casaos-user-service")
+            .await
+            .unwrap();
         let output = tokio::fs::File::create("./build/casaos-user-service/PKGBUILD")
             .await
             .unwrap();
@@ -648,6 +683,9 @@ mod test {
 
     #[tokio::test]
     async fn test_generate_casaos_message_bus_package() {
+        create_package_dir("./build/casaos-message-bus")
+            .await
+            .unwrap();
         let output = tokio::fs::File::create("./build/casaos-message-bus/PKGBUILD")
             .await
             .unwrap();
@@ -656,6 +694,7 @@ mod test {
 
     #[tokio::test]
     async fn test_generate_casaos_gateway_package() {
+        create_package_dir("./build/casaos-gateway").await.unwrap();
         let output = tokio::fs::File::create("./build/casaos-gateway/PKGBUILD")
             .await
             .unwrap();
@@ -664,6 +703,7 @@ mod test {
 
     #[tokio::test]
     async fn test_generate_casaos_cli_package() {
+        create_package_dir("./build/casaos-cli").await.unwrap();
         let output = tokio::fs::File::create("./build/casaos-cli/PKGBUILD")
             .await
             .unwrap();
@@ -684,24 +724,34 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_get_x86_64_checksums() {
-        let checksums = get_x86_64_checksums().await;
-        println!("{:?}", checksums);
-        assert_eq!(checksums.len(), 8);
-    }
+    async fn test_get_checksums() {
+        let casaos_checksums = get_checksums(PackageType::CasaOS).await;
+        let casaos_app_management_checksums = get_checksums(PackageType::CasaOSAppManagement).await;
+        let casaos_local_storage_checksums = get_checksums(PackageType::CasaOSLocalStorage).await;
+        let casaos_user_service_checksums = get_checksums(PackageType::CasaOSUserService).await;
+        let casaos_message_bus_checksums = get_checksums(PackageType::CasaOSMessageBus).await;
+        let casaos_gateway_checksums = get_checksums(PackageType::CasaOSGateway).await;
+        let casaos_cli_checksums = get_checksums(PackageType::CasaOSCLI).await;
 
-    #[tokio::test]
-    async fn test_get_aarch64_checksums() {
-        let checksums = get_aarch64_checksums().await;
-        println!("{:?}", checksums);
-        assert_eq!(checksums.len(), 8);
-    }
-
-    #[tokio::test]
-    async fn test_get_armv7_checksums() {
-        let checksums = get_armv7h_checksums().await;
-        println!("{:?}", checksums);
-        assert_eq!(checksums.len(), 8);
+        println!("casaos_checksums: {:?}\n", casaos_checksums);
+        println!(
+            "casaos_app_management_checksums: {:?}\n",
+            casaos_app_management_checksums
+        );
+        println!(
+            "casaos_local_storage_checksums: {:?}\n",
+            casaos_local_storage_checksums
+        );
+        println!(
+            "casaos_user_service_checksums: {:?}\n",
+            casaos_user_service_checksums
+        );
+        println!(
+            "casaos_message_bus_checksums: {:?}\n",
+            casaos_message_bus_checksums
+        );
+        println!("casaos_gateway_checksums: {:?}\n", casaos_gateway_checksums);
+        println!("casaos_cli_checksums: {:?}\n", casaos_cli_checksums);
     }
 
     #[tokio::test]
