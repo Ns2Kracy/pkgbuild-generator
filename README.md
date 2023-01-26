@@ -8,5 +8,7 @@
 - [ ] CasaOS-UserService
 - [ ] CasaOS-MessageBus
 - [ ] CasaOS-Gateway
-- [ ] CasaOS-CLI
+- [x] CasaOS-CLI
 - [x] CasaOS-UI
+
+> ps: 
