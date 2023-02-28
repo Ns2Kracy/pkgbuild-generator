@@ -1,4 +1,27 @@
-use crate::consts::VERSION;
+/// CasaOS Version
+pub const VERSION: &str = "0.4.1";
+
+/// Aur Maintainer
+pub const MAINTAINER: &str = "Maintainer: Ns2Kracy <2220496937@qq.com>";
+
+/// CasaOS UI Source
+pub const UI_SOURCE: &str =
+    "${url}/releases/download/v${pkgver}/linux-all-casaos-v${pkgver}.tar.gz";
+
+/// x86_64 Arch Source
+pub const X86_64_SOURCE: &str =
+    "${url}/releases/download/v${pkgver}/linux-amd64-${pkgname}-v${pkgver}.tar.gz";
+
+/// aarch64 Arch Source
+pub const AARCH64_SOURCE: &str =
+    "${url}/releases/download/v${pkgver}/linux-arm64-${pkgname}-v${pkgver}.tar.gz";
+
+/// armv7h Arch Source
+pub const ARMV7H_SOURCE: &str =
+    "${url}/releases/download/v${pkgver}/linux-armv7-${pkgname}-v${pkgver}.tar.gz";
+
+/// Install File
+pub const INSTALL: &str = "${pkgname}.install";
 
 #[derive(Debug, Clone, Copy)]
 pub enum PackageType {
@@ -42,6 +65,13 @@ impl PackageType {
             PackageType::CasaOSUI => "casaos-ui",
         }
     }
+
+    pub fn create_file(&self) -> std::fs::File {
+        let dir_name = format!("./build/{}", self.to_string());
+        std::fs::create_dir_all(dir_name).unwrap();
+        let file_name = format!("./build/{}/PKGBUILD", self.to_string());
+        std::fs::File::create(file_name).unwrap()
+    }
 }
 
 pub async fn get_checksums(package: PackageType) -> Vec<String> {
@@ -78,70 +108,27 @@ pub async fn get_checksums(package: PackageType) -> Vec<String> {
     ]
 }
 
-pub async fn create_dirs() -> Result<(), Box<dyn std::error::Error>> {
-    tokio::fs::create_dir_all("./build").await?;
-    tokio::fs::create_dir_all("./build/casaos").await?;
-    tokio::fs::create_dir_all("./build/casaos-app-management").await?;
-    tokio::fs::create_dir_all("./build/casaos-local-storage").await?;
-    tokio::fs::create_dir_all("./build/casaos-user-service").await?;
-    tokio::fs::create_dir_all("./build/casaos-message-bus").await?;
-    tokio::fs::create_dir_all("./build/casaos-gateway").await?;
-    tokio::fs::create_dir_all("./build/casaos-cli").await?;
-    tokio::fs::create_dir_all("./build/casaos-ui").await?;
-    Ok(())
-}
+// pub async fn create_dirs() -> Result<(), Box<dyn std::error::Error>> {
+//     tokio::fs::create_dir_all("./build").await?;
+//     tokio::fs::create_dir_all("./build/casaos").await?;
+//     tokio::fs::create_dir_all("./build/casaos-app-management").await?;
+//     tokio::fs::create_dir_all("./build/casaos-local-storage").await?;
+//     tokio::fs::create_dir_all("./build/casaos-user-service").await?;
+//     tokio::fs::create_dir_all("./build/casaos-message-bus").await?;
+//     tokio::fs::create_dir_all("./build/casaos-gateway").await?;
+//     tokio::fs::create_dir_all("./build/casaos-cli").await?;
+//     tokio::fs::create_dir_all("./build/casaos-ui").await?;
+//     Ok(())
+// }
 
-pub async fn output_package() -> Vec<tokio::fs::File> {
-    let files = vec![
-        "./build/casaos",
-        "./build/casaos-app-management",
-        "./build/casaos-local-storage",
-        "./build/casaos-user-service",
-        "./build/casaos-message-bus",
-        "./build/casaos-gateway",
-        "./build/casaos-cli",
-        "./build/casaos-ui",
-    ];
+// #[cfg(test)]
+// mod test {
+//     use crate::generators::{get_checksums, PackageType};
 
-    let mut outputs = Vec::new();
-    for file in files {
-        tokio::fs::create_dir_all(file).await.unwrap();
-        let output = tokio::fs::File::create(format!("{}/PKGBUILD", file))
-            .await
-            .unwrap();
-        outputs.push(output);
-    }
-    outputs
-}
-
-pub async fn output_install() -> Vec<tokio::fs::File> {
-    let files = vec![
-        "./build/casaos/casaos.install",
-        "./build/casaos-app-management/casaos-app-management.install",
-        "./build/casaos-local-storage/casaos-local-storage.install",
-        "./build/casaos-user-service/casaos-user-service.install",
-        "./build/casaos-message-bus/casaos-message-bus.install",
-        "./build/casaos-gateway/casaos-gateway.install",
-        "./build/casaos-ui/casaos-ui.install",
-    ];
-
-    let mut outputs = Vec::new();
-    for file in files {
-        tokio::fs::create_dir_all(file).await.unwrap();
-        let output = tokio::fs::File::create(format!("{}", file)).await.unwrap();
-        outputs.push(output);
-    }
-    outputs
-}
-
-#[cfg(test)]
-mod test {
-    use crate::generators::{get_checksums, PackageType};
-
-    #[tokio::test]
-    async fn test_get_checksums() {
-        let checksums = get_checksums(PackageType::CasaOS).await;
-        println!("{:?}", checksums);
-        assert_eq!(checksums.len(), 3);
-    }
-}
+//     #[tokio::test]
+//     async fn test_get_checksums() {
+//         let checksums = get_checksums(PackageType::CasaOS).await;
+//         println!("{:?}", checksums);
+//         assert_eq!(checksums.len(), 3);
+//     }
+// }

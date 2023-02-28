@@ -1,52 +1,25 @@
-pub use crate::{consts::*, utils::*};
-use tokio::io::AsyncWriteExt;
+use super::Pkgbuild;
+use crate::utils::*;
 
-pub async fn generate_casaos_ui_package(
-    mut output: tokio::fs::File,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let info_content = format!(
-        "# {}
-pkgname=casaos-ui
-pkgver={}
-pkgrel=1
-pkgdesc=\"The front-end of CasaOS,build with VueJS.\"
-arch=('any')
-url=\"{}\"
-license=('unknown')
-install=\"{}\"
-source=({})
-sha256sums=(SKIP)
-    ",
-        MAINTAINER,
-        VERSION,
-        PackageType::CasaOSUI.url(),
-        INSTALL,
-        SOURCE
-    );
-    let package_content = r#"
-package() {
-    _sysdir="${srcdir}/build/sysroot"
-    mkdir -p "${pkgdir}/var/lib/casaos"
-    mv "${_sysdir}/var/lib/casaos/www" "${pkgdir}/var/lib/casaos/"
-}
-    "#;
+pub fn casaos_ui_package() -> Result<(), Box<dyn std::error::Error>> {
+    Pkgbuild::new()
+        .name("casaos-ui".to_owned())
+        .pkgver(VERSION.to_owned())
+        .pkgrel("1".to_owned())
+        .pkgdesc("The front-end of CasaOS,build with VueJS.".to_owned())
+        .arch("any".to_string())
+        .url(PackageType::CasaOSUI.url().to_owned())
+        .license("unknown".to_owned())
+        .source(UI_SOURCE.to_owned())
+        .sha256sums("SKIP".to_owned())
+        .package(
+            r#"
 
-    let content = format!("{}{}", info_content, package_content);
+"#
+            .trim()
+            .to_owned(),
+        )
+        .output_package()?;
 
-    output.write(&content.as_bytes()).await?;
-
-    Ok(())
-}
-
-pub async fn generate_casaos_ui_install(
-    mut output: tokio::fs::File,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let post_remove = r#"#!/bin/bash
-post_remove() {
-    rm -rf /var/lib/casaos
-}
-    "#;
-
-    output.write(&post_remove.as_bytes()).await?;
     Ok(())
 }
